@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { gsap } from 'gsap';
 
 let scene, camera, renderer, hourHand, minuteHand, clockGroup;
 let angleStep = Math.PI / 6;
@@ -143,6 +144,8 @@ function init() {
   minuteHand.position.set(0, 0, 1);
   clockGroup.add(minuteHand);
 
+  loadVideo();
+
   createSector(currentStep);
   createEyes();
   createMoustache();
@@ -150,6 +153,42 @@ function init() {
   animate();
   setInterval(updateClock, 2000);
 }
+
+function loadVideo(callback) {
+  video = document.createElement('video');
+  video.src = '/videos/video1698426668.mp4';
+  video.loop = true;
+  video.muted = true;
+  video.playsInline = true;
+  video.crossOrigin = 'anonymous'; // Add this if needed
+
+  video.addEventListener('canplay', () => {
+    console.log('✅ Video is ready to play');
+
+    videoTexture = new THREE.VideoTexture(video);
+    videoTexture.minFilter = THREE.LinearFilter;
+    videoTexture.magFilter = THREE.LinearFilter;
+    videoTexture.format = THREE.RGBAFormat;
+
+    if (callback) callback();
+  });
+
+  video.addEventListener('error', (e) => {
+    console.error('❌ Video load error', e);
+  });
+
+  // Require user interaction to start video
+  document.addEventListener('click', () => {
+    video.play().then(() => {
+      console.log('🎬 Video started playing');
+    }).catch(err => {
+      console.error('⚠️ Video play failed', err);
+    });
+  });
+}
+
+
+
 
 function createSector(step) {
   const shape = new THREE.Shape();
@@ -180,6 +219,31 @@ function createSector(step) {
   }
   sectors.push(sector);
 }
+
+function createVideoSector(startStep, endStep) {
+  const shape = new THREE.Shape();
+  const radius = 20;
+  const startAngle = -Math.PI / 2 + angleStep * startStep;
+  const endAngle = -Math.PI / 2 + angleStep * endStep;
+
+  shape.moveTo(0, 0);
+  shape.absarc(0, 0, radius, startAngle, endAngle, false);
+
+  const geometry = new THREE.ShapeGeometry(shape);
+
+  // ⬇️ Load Test Image Texture
+  const textureLoader = new THREE.TextureLoader();
+  const testTexture = textureLoader.load('/images/accident1.jpg');
+
+  const material = new THREE.MeshBasicMaterial({ map: testTexture, side: THREE.DoubleSide });
+
+  const videoSector = new THREE.Mesh(geometry, material);
+  videoSector.rotation.x = Math.PI / 2;
+  videoSector.position.z = -1.5; // Move it fully behind the clock
+
+  clockGroup.add(videoSector);
+}
+
 
 function createEyes() {
   const eyeWhiteMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff' });
@@ -285,58 +349,108 @@ function createMouth() {
   clockGroup.add(mouthMesh);
 }
 
-function setupBackgroundVideo(videoSrc) {
-  video = document.createElement('video');
-  video.src = videoSrc;
-  video.loop = true;
-  video.muted = true;
-  video.play();
+function createImageOnBack() {
+  const textureLoader = new THREE.TextureLoader();
+  const testTexture = textureLoader.load('/images/accident1.jpeg', (texture) => {
+    const imageAspect = texture.image.width / texture.image.height;
 
-  videoTexture = new THREE.VideoTexture(video);
-  videoTexture.minFilter = THREE.LinearFilter;
-  videoTexture.magFilter = THREE.LinearFilter;
-  videoTexture.format = THREE.RGBFormat;
+    // Default: repeat full texture
+    texture.repeat.set(1, 1);
+    texture.offset.set(0, 0);
 
-  const geometry = new THREE.PlaneGeometry(100, 100); // Large background
-  const material = new THREE.MeshBasicMaterial({ map: videoTexture });
+    // Crop and center to make it a square region
+    if (imageAspect > 1) {
+      // Wide image
+      texture.repeat.set(1 / imageAspect, 1);
+      texture.offset.x = (1 - (1 / imageAspect)) / 2;
+    } else {
+      // Tall image
+      texture.repeat.set(1, imageAspect);
+      texture.offset.set(0, (1 - imageAspect) / 2);
+    }
 
-  videoMesh = new THREE.Mesh(geometry, material);
-  videoMesh.position.z = -1; // Behind clock
-  scene.add(videoMesh);
-}
-
-function createBlackSector() {
-  const shape = new THREE.Shape();
-  const radius = 20;
-
-  const startAngle = -Math.PI / 2; // 12 o'clock
-  const endAngle = startAngle + angleStep * 1; // 1 o'clock
-
-  shape.moveTo(0, 0);
-  shape.absarc(0, 0, radius, startAngle, endAngle, false);
-
-  const geometry = new THREE.ShapeGeometry(shape);
-  const material = new THREE.MeshStandardMaterial({
-    color: '#000000',
-    opacity: 1.0,
-    transparent: false,
-    side: THREE.DoubleSide
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
   });
 
-  const blackSector = new THREE.Mesh(geometry, material);
-  blackSector.rotation.x = Math.PI / 2;
-  blackSector.position.z = 0.6;
+  console.log(testTexture,'sssssssssssss');
+  
+  // ✅ Circle geometry
+  const geometry = new THREE.CircleGeometry(18, 64);
+  const material = new THREE.MeshBasicMaterial({ map: testTexture, side: THREE.DoubleSide });
 
-  clockGroup.add(blackSector);
+  const imageCircle = new THREE.Mesh(geometry, material);
+
+  // ✅ Correct facing and flipping
+  imageCircle.rotation.x = -Math.PI ;  // Flat against the clock back
+  imageCircle.rotation.z = Math.PI;       // Flips the image to face the right direction when clock is spun
+
+  imageCircle.position.z = -0.51;         // Just behind the clock
+
+  clockGroup.add(imageCircle);
 }
+
+function createVideoOnBack() {
+  if (!videoTexture) {
+    loadVideo(() => {
+      // Once video is ready, create the mesh
+      createVideoMesh();
+    });
+  } else {
+    createVideoMesh();
+  }
+}
+
+function createVideoMesh() {
+  // Make sure the texture wraps correctly
+  videoTexture.wrapS = THREE.ClampToEdgeWrapping;
+  videoTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+  const geometry = new THREE.CircleGeometry(18, 64);
+  const material = new THREE.MeshBasicMaterial({ map: videoTexture, side: THREE.DoubleSide });
+
+  const videoCircle = new THREE.Mesh(geometry, material);
+
+  // Flip to properly face the user when the clock is spun
+  videoCircle.rotation.x = -Math.PI;
+  videoCircle.rotation.z = Math.PI;
+
+  videoCircle.position.z = -0.51;
+
+  clockGroup.add(videoCircle);
+
+  // 👉 Always reset and play from start
+  video.currentTime = 0;
+  video.play();
+
+  // 👉 Listen for video end
+  video.onended = () => {
+    console.log('Video finished, rotating back...');
+
+    gsap.to(clockGroup.rotation, { 
+      y: "+=" + (Math.PI * 9),  // 4.5 turns back
+      duration: 2, 
+      ease: "power2.inOut"
+    });
+  };
+}
+
 
 function updateClock() {
   const previousStep = currentStep;
   currentStep = (currentStep + 1) % 12;
 
-  // Detect transition from 12 to 1
   if (previousStep === 11 && currentStep === 0) {
-    triggerSectorAndVideo();
+    // createImageOnBack();
+    createVideoOnBack();
+
+    gsap.to(clockGroup.rotation, { 
+      y: "+=" + (Math.PI * 9),  // 4.5 turns
+      duration: 2, 
+      ease: "power2.inOut"
+    });
+
+    return;
   }
 
   const rotation = currentStep * angleStep;
@@ -345,18 +459,15 @@ function updateClock() {
   createSector(currentStep);
 }
 
-function triggerSectorAndVideo() {
-  createBlackSector();
-
-  // Example video path: adjust this to your actual video
-  setupBackgroundVideo('/videos/video1698426668.mp4');
-}
 
 function animate() {
   requestAnimationFrame(animate);
+  if (videoTexture) {
+    videoTexture.needsUpdate = true; // Force texture refresh
+  }
   renderer.render(scene, camera);
 }
- 
+
 document.addEventListener('mousemove', onMouseMove);
 
 function onMouseMove(event) {
@@ -374,3 +485,11 @@ function onMouseMove(event) {
     rightPupil.position.y = 7.5 + mouseY * maxOffset;
   }
 }
+
+
+video.addEventListener('canplay', () => {
+  console.log('Video can play');
+});
+video.addEventListener('error', (e) => {
+  console.error('Video error', e);
+});
