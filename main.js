@@ -4,13 +4,23 @@ import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { gsap } from 'gsap';
 
+const labels = [
+    'Start', 'Plan', 'Design', 'Develop', 'Test', 'Review', 'Deploy',
+    'Monitor', 'Improve', 'Scale', 'Support', 'Celebrate', 'Reflect',
+    'Innovate', 'Document', 'Communicate', 'Train', 'Optimize',
+    'Collaborate', 'Launch', 'Evolve'
+];
+
+let totalSteps = labels.length;
+let angleStep = (Math.PI * 2) / totalSteps; // full circle divided by 21
+
 let scene, camera, renderer, hourHand, minuteHand, clockGroup;
-let angleStep = Math.PI / 6;
 let currentStep = 0;
 let sectors = [];
 const colors = ['#FFB6C1', '#FFD700', '#90EE90', '#87CEFA', '#FFA07A', '#DDA0DD', '#F08080', '#B0E0E6', '#FFFACD', '#E0FFFF', '#E6E6FA', '#FFE4E1'];
 let leftPupil, rightPupil;
 let video, videoTexture;
+let isVideoPlaying = false;
 
 init();
 
@@ -54,10 +64,10 @@ function init() {
   clockGroup.add(outerRing);
 
   // ⏱️ Tick Marks (12 hour marks)
-  for (let i = 0; i < 12; i++) {
-    const angle = i * angleStep - Math.PI / 2;
-    const innerR = 14.5;
-    const outerR = 17.5;
+  for (let i = 0; i < totalSteps; i++) {
+    const angle = ((totalSteps - i) * angleStep) + Math.PI / 2;
+    const innerR = 16;
+    const outerR = 17;
 
     const x1 = innerR * Math.cos(angle);
     const y1 = innerR * Math.sin(angle);
@@ -75,28 +85,31 @@ function init() {
   }
 
   // ⏱️ Minute Tick Marks (60 total)
-  for (let i = 0; i < 60; i++) {
-    // Skip the ones where big hour marks already exist
-    if (i % 5 === 0) continue;
+  const minorTicksPerSection = 5; // Can also use 6
+  const totalMinorTicks = totalSteps * minorTicksPerSection;
 
-    const angle = i * (Math.PI * 2 / 60) - Math.PI / 2;
-    const innerR = 16.2;
-    const outerR = 17.5;
+  for (let i = 0; i < totalMinorTicks; i++) {
+      if (i % minorTicksPerSection === 0) continue; // Skip major ticks
 
-    const x1 = innerR * Math.cos(angle);
-    const y1 = innerR * Math.sin(angle);
-    const x2 = outerR * Math.cos(angle);
-    const y2 = outerR * Math.sin(angle);
+      const angle = i * (Math.PI * 2 / totalMinorTicks) - Math.PI / 2;
+      const innerR = 16.5; // Even closer to outer edge
+      const outerR = 17;   // Shorter length
 
-    const geometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(x1, y1, 0.61),
-      new THREE.Vector3(x2, y2, 0.61)
-    ]);
+      const x1 = innerR * Math.cos(angle);
+      const y1 = innerR * Math.sin(angle);
+      const x2 = outerR * Math.cos(angle);
+      const y2 = outerR * Math.sin(angle);
 
-    const material = new THREE.LineBasicMaterial({ color: '#444444' });
-    const line = new THREE.Line(geometry, material);
-    clockGroup.add(line);
+      const geometry = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x1, y1, 0.61),
+          new THREE.Vector3(x2, y2, 0.61)
+      ]);
+
+      const material = new THREE.LineBasicMaterial({ color: '#444444' });
+      const line = new THREE.Line(geometry, material);
+      clockGroup.add(line);
   }
+
   // Center Sphere
   const centerSphere = new THREE.Mesh(
     new THREE.SphereGeometry(0.5, 32, 32),
@@ -108,18 +121,21 @@ function init() {
   // Clock Numbers
   const loader = new FontLoader();
   loader.load('/fonts/helvetiker_regular.typeface.json', function (font) {
-    for (let i = 1; i <= 12; i++) {
-      const textGeo = new TextGeometry(i.toString(), {
+    for (let i = 1; i <= totalSteps; i++) {
+      const label = labels[i - 1];
+
+      const textGeo = new TextGeometry(label, {
         font,
-        size: 1,
+        size: 0.9,
         height: 0.2
       });
       textGeo.center();
+
       const material = new THREE.MeshStandardMaterial({ color: '#228B22' });
       const textMesh = new THREE.Mesh(textGeo, material);
 
-      const angle = ((12 - i) * angleStep) + Math.PI / 2;
-      const radius = 13;
+      const angle = ((totalSteps - i) * angleStep) + Math.PI / 2;
+      const radius = 14.1;
 
       textMesh.position.x = radius * Math.cos(angle);
       textMesh.position.y = radius * Math.sin(angle);
@@ -150,9 +166,130 @@ function init() {
   createEyes();
   createMoustache();
   createMouth();
+  showIntroSequence();
   animate();
-  setInterval(updateClock, 2000);
+  setInterval(updateClock, 1000);
 }
+
+
+function showIntroSequence() {
+    const messages = [
+        "Do you know who I am?",
+        "I am Viraj",
+        "And do you know what this is?",
+        "This is my memory clock",
+        "It helps me remember beautiful moments with you",
+        "Let's see where it takes!"
+    ];
+
+    showSpeechBubblesInSequence(messages, 0, () => {
+        // ✅ After bubbles, start the clock
+        startClock();
+    });
+}
+
+function showSpeechBubblesInSequence(messages, index, onComplete) {
+    if (index >= messages.length) {
+        if (onComplete) onComplete();
+        return;
+    }
+
+    const bubbleGroup = createSpeechBubble(messages[index], 20, 12, 4, false, 0);
+
+    gsap.to(bubbleGroup.scale, {
+        x: 1, y: 1, z: 1,
+        duration: 0.7,
+        ease: "back.out(1.7)",
+        onComplete: () => {
+            setTimeout(() => {
+                gsap.to(bubbleGroup.scale, {
+                    x: 0, y: 0, z: 0,
+                    duration: 0.5,
+                    ease: "power1.in",
+                    onComplete: () => {
+                        clockGroup.remove(bubbleGroup);
+                        showSpeechBubblesInSequence(messages, index + 1, onComplete);
+                    }
+                });
+            }, 2500);
+        }
+    });
+}
+function createSpeechBubble(message, x = 10, y = 5, z = 4, autoHide = true, delay = 1000) {
+    const bubbleGroup = new THREE.Group();
+    bubbleGroup.position.set(x, y, z);
+    bubbleGroup.name = 'speechBubble';
+    clockGroup.add(bubbleGroup);
+
+    const loader = new FontLoader();
+    loader.load('/fonts/helvetiker_regular.typeface.json', function (font) {
+        const textGeo = new TextGeometry(message, {
+            font: font,
+            size: 1.0,
+            height: 0.05,
+            curveSegments: 12
+        });
+        textGeo.computeBoundingBox();
+
+        const textWidth = textGeo.boundingBox.max.x - textGeo.boundingBox.min.x;
+
+        const padding = 2; // Bubble padding
+        const bubbleWidth = textWidth + padding * 2;
+        const bubbleHeight = 5;
+        const radius = 1;
+
+        // Draw bubble shape based on text width
+        const shape = new THREE.Shape();
+        shape.moveTo(-bubbleWidth / 2 + radius, bubbleHeight / 2);
+        shape.lineTo(bubbleWidth / 2 - radius, bubbleHeight / 2);
+        shape.quadraticCurveTo(bubbleWidth / 2, bubbleHeight / 2, bubbleWidth / 2, bubbleHeight / 2 - radius);
+        shape.lineTo(bubbleWidth / 2, -bubbleHeight / 2 + radius);
+        shape.quadraticCurveTo(bubbleWidth / 2, -bubbleHeight / 2, bubbleWidth / 2 - radius, -bubbleHeight / 2);
+        shape.lineTo(-bubbleWidth / 2 + radius, -bubbleHeight / 2);
+        shape.quadraticCurveTo(-bubbleWidth / 2, -bubbleHeight / 2, -bubbleWidth / 2, -bubbleHeight / 2 + radius);
+        shape.lineTo(-bubbleWidth / 2, bubbleHeight / 2 - radius);
+        shape.quadraticCurveTo(-bubbleWidth / 2, bubbleHeight / 2, -bubbleWidth / 2 + radius, bubbleHeight / 2);
+
+        const bubbleSettings = {
+            depth: 0.7,
+            bevelEnabled: true,
+            bevelThickness: 0.05,
+            bevelSize: 0.05,
+            bevelSegments: 5
+        };
+
+        const bubbleGeometry = new THREE.ExtrudeGeometry(shape, bubbleSettings);
+        const bubbleMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff' });
+        const bubbleMesh = new THREE.Mesh(bubbleGeometry, bubbleMaterial);
+        bubbleMesh.castShadow = true;
+
+        bubbleGroup.add(bubbleMesh);
+
+        // Tail
+        const tailShape = new THREE.Shape();
+        tailShape.moveTo(0, 0);
+        tailShape.lineTo(1.2, -1.2);
+        tailShape.lineTo(2.4, 0);
+        tailShape.lineTo(0, 0);
+
+        const tailGeometry = new THREE.ExtrudeGeometry(tailShape, { depth: 0.6, bevelEnabled: false });
+        const tailMesh = new THREE.Mesh(tailGeometry, bubbleMaterial);
+
+        tailMesh.position.set(bubbleWidth / 4, -bubbleHeight / 2 - 0.2, 0);
+        bubbleGroup.add(tailMesh);
+
+        // Text
+        textGeo.center();
+        const textMaterial = new THREE.MeshStandardMaterial({ color: '#000000' });
+        const textMesh = new THREE.Mesh(textGeo, textMaterial);
+        textMesh.position.set(0, 0, 0.8); // Slightly in front of bubble
+        bubbleGroup.add(textMesh);
+    });
+
+    bubbleGroup.scale.set(0, 0, 0);
+    return bubbleGroup;
+}
+
 
 function loadVideo(callback) {
   video = document.createElement('video');
@@ -186,9 +323,6 @@ function loadVideo(callback) {
     });
   });
 }
-
-
-
 
 function createSector(step) {
   const shape = new THREE.Shape();
@@ -244,6 +378,25 @@ function createVideoSector(startStep, endStep) {
   clockGroup.add(videoSector);
 }
 
+function createEyelashes(x, y, z) {
+    const eyelashMaterial = new THREE.LineBasicMaterial({ color: '#000000' });
+    const eyelashGroup = new THREE.Group();
+
+    for (let i = -0.5; i <= 0.5; i += 0.2) {
+        const points = [
+            new THREE.Vector3(x + i, y + 1.3, z + 2.7), // Closer to the eye
+            new THREE.Vector3(x + i + (i * 0.1), y + 1.6, z + 2.7) // Tilt outwards
+        ];
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geometry, eyelashMaterial);
+        eyelashGroup.add(line);
+    }
+
+    clockGroup.add(eyelashGroup);
+}
+
+createEyelashes(-4.5, 7.5, 0); // Left eye
+createEyelashes(4.5, 7.5, 0);  // Right eye
 
 function createEyes() {
   const eyeWhiteMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff' });
@@ -317,37 +470,39 @@ function createMoustache() {
 }
 
 function createMouth() {
-  const mouthShape = new THREE.Shape();
+    const mouthShape = new THREE.Shape();
 
-  // Smiling arc
-  mouthShape.moveTo(-2, 0);
-  mouthShape.quadraticCurveTo(0, 1, 2, 0);
-  mouthShape.lineTo(1.8, -0.3);
-  mouthShape.quadraticCurveTo(0, -0.5, -1.8, -0.3);
-  mouthShape.lineTo(-2, 0);
+    // Create a wide, smooth smiling arc
+    mouthShape.moveTo(-3, 0); // Start from the left corner
+    mouthShape.quadraticCurveTo(0, 0.9, 3, 0); // Smooth upper arc
 
-  const mouthSettings = {
-    depth: 0.3,
-    bevelEnabled: true,
-    bevelThickness: 0.02,
-    bevelSize: 0.02,
-    bevelSegments: 1
-  };
+    // Smooth bottom arc (no sharp edges)
+    mouthShape.quadraticCurveTo(0, -1.5, -3, 0); // Smoothly back to start
 
-  const mouthGeometry = new THREE.ExtrudeGeometry(mouthShape, mouthSettings);
-  const mouthMaterial = new THREE.MeshStandardMaterial({ color: '#000000' });
-  const mouthMesh = new THREE.Mesh(mouthGeometry, mouthMaterial);
+    const mouthSettings = {
+        depth: 0.3,
+        bevelEnabled: true,
+        bevelThickness: 0.02,
+        bevelSize: 0.02,
+        bevelSegments: 5,  // Smooth bevel
+        curveSegments: 20  // High smoothness
+    };
 
-  mouthMesh.rotation.set(-Math.PI / 2, 0, 0);      // face forward
-  mouthMesh.position.set(0, -5.4, 2.5);  // Bring forward slightly  
-  mouthMesh.scale.set(0.9, 0.9, 1);      // Make a bit wider
+    const mouthGeometry = new THREE.ExtrudeGeometry(mouthShape, mouthSettings);
+    const mouthMaterial = new THREE.MeshStandardMaterial({ color: '#000000' });
+    const mouthMesh = new THREE.Mesh(mouthGeometry, mouthMaterial);
 
-  const oldMouth = clockGroup.getObjectByName('mouth');
-  if (oldMouth) clockGroup.remove(oldMouth);
+    mouthMesh.rotation.set(-Math.PI, 0, 0);  // Face forward
+    mouthMesh.position.set(0, -5.8, 2.5);
+    mouthMesh.scale.set(1.0, 1.0, 1);
 
-  mouthMesh.name = 'mouth';
-  clockGroup.add(mouthMesh);
+    const oldMouth = clockGroup.getObjectByName('mouth');
+    if (oldMouth) clockGroup.remove(oldMouth);
+
+    mouthMesh.name = 'mouth';
+    clockGroup.add(mouthMesh);
 }
+
 
 function createImageOnBack() {
   const textureLoader = new THREE.TextureLoader();
@@ -374,7 +529,7 @@ function createImageOnBack() {
   });
 
   console.log(testTexture,'sssssssssssss');
-  
+
   // ✅ Circle geometry
   const geometry = new THREE.CircleGeometry(18, 64);
   const material = new THREE.MeshBasicMaterial({ map: testTexture, side: THREE.DoubleSide });
@@ -402,16 +557,55 @@ function createVideoOnBack() {
 }
 
 function createVideoMesh() {
-  // Make sure the texture wraps correctly
+  // Prepare video texture
   videoTexture.wrapS = THREE.ClampToEdgeWrapping;
   videoTexture.wrapT = THREE.ClampToEdgeWrapping;
 
   const geometry = new THREE.CircleGeometry(18, 64);
   const material = new THREE.MeshBasicMaterial({ map: videoTexture, side: THREE.DoubleSide });
+  const blurMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        tDiffuse: { value: videoTexture },
+        resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        direction: { value: new THREE.Vector2(1.0, 0.0) }, // Horizontal blur
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform vec2 resolution;
+        uniform vec2 direction;
+        varying vec2 vUv;
+
+        void main() {
+            vec4 color = vec4(0.0);
+            float total = 0.0;
+
+            float offset = 1.0 / 512.0;
+
+            for (float t = -10.0; t <= 10.0; t++) {
+                float percent = (t + 10.0) / 20.0;
+                float weight = 1.0 - abs(percent - 0.5) * 2.0;
+                vec2 uvOffset = direction * t * offset;
+                color += texture2D(tDiffuse, vUv + uvOffset) * weight;
+                total += weight;
+            }
+
+            gl_FragColor = color / total;
+        }
+    `,
+    transparent: false
+});
+
 
   const videoCircle = new THREE.Mesh(geometry, material);
 
-  // Flip to properly face the user when the clock is spun
+  // Correct orientation
   videoCircle.rotation.x = -Math.PI;
   videoCircle.rotation.z = Math.PI;
 
@@ -419,45 +613,56 @@ function createVideoMesh() {
 
   clockGroup.add(videoCircle);
 
-  // 👉 Always reset and play from start
+  // Start video
   video.currentTime = 0;
   video.play();
 
-  // 👉 Listen for video end
+  // Set video as background
+  scene.background = videoTexture();
+
   video.onended = () => {
-    console.log('Video finished, rotating back...');
+    console.log('Video finished, rotating forward...');
 
     gsap.to(clockGroup.rotation, { 
-      y: "+=" + (Math.PI * 9),  // 4.5 turns back
+      y: "+=" + (Math.PI * 9),  // Spin forward back to original
       duration: 2, 
-      ease: "power2.inOut"
+      ease: "power2.inOut",
+      onComplete: () => {
+        // Reset background
+        scene.background = new THREE.Color('#FFF176');
+        isVideoPlaying = false; // Resume clock updates
+      }
     });
   };
 }
 
 
 function updateClock() {
+  if (isVideoPlaying) return; // Pause clock updates while video is playing
+
   const previousStep = currentStep;
-  currentStep = (currentStep + 1) % 12;
-
-  if (previousStep === 11 && currentStep === 0) {
-    // createImageOnBack();
-    createVideoOnBack();
-
-    gsap.to(clockGroup.rotation, { 
-      y: "+=" + (Math.PI * 9),  // 4.5 turns
-      duration: 2, 
-      ease: "power2.inOut"
-    });
-
-    return;
-  }
+  currentStep = (currentStep + 1) % totalSteps;
 
   const rotation = currentStep * angleStep;
   minuteHand.rotation.z = -rotation;
 
   createSector(currentStep);
+
+  if (previousStep === totalSteps - 1 && currentStep === 0) {
+    // Immediately spin backwards when the last step is completed
+    isVideoPlaying = true;
+
+    gsap.to(clockGroup.rotation, { 
+      y: "-=" + (Math.PI * 9),  // Spin backwards
+      duration: 2, 
+      ease: "power2.inOut",
+      onComplete: () => {
+        createVideoOnBack();
+      }
+    });
+  }
 }
+
 
 
 function animate() {
@@ -485,11 +690,3 @@ function onMouseMove(event) {
     rightPupil.position.y = 7.5 + mouseY * maxOffset;
   }
 }
-
-
-video.addEventListener('canplay', () => {
-  console.log('Video can play');
-});
-video.addEventListener('error', (e) => {
-  console.error('Video error', e);
-});
